@@ -7,6 +7,7 @@ import (
 	"slices"
 
 	"github.com/manusa/podman-mcp-server/pkg/api"
+	"github.com/manusa/podman-mcp-server/pkg/config"
 	"github.com/manusa/podman-mcp-server/pkg/podman"
 	"github.com/manusa/podman-mcp-server/pkg/version"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -19,7 +20,7 @@ type Server struct {
 }
 
 // NewServer creates a new MCP server with all tools registered.
-func NewServer() (*Server, error) {
+func NewServer(cfg config.Config) (*Server, error) {
 	s := &Server{
 		server: mcp.NewServer(
 			&mcp.Implementation{
@@ -36,7 +37,7 @@ func NewServer() (*Server, error) {
 	}
 
 	var err error
-	if s.podman, err = podman.NewPodman(); err != nil {
+	if s.podman, err = podman.NewPodman(cfg); err != nil {
 		return nil, err
 	}
 

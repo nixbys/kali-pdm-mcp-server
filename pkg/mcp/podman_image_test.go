@@ -6,10 +6,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/suite"
 
 	"github.com/manusa/podman-mcp-server/internal/test"
+	"github.com/manusa/podman-mcp-server/pkg/config"
 )
 
 // ImageSuite tests image tools using the mock Podman API server.
@@ -19,14 +20,15 @@ type ImageSuite struct {
 	containerFile string
 }
 
-func TestImageSuite(t *testing.T) {
-	suite.Run(t, new(ImageSuite))
-}
-
-func (s *ImageSuite) SetupTest() {
-	s.McpSuite.SetupTest()
-	// Create a temporary Containerfile for build tests
-	s.containerFile = test.CreateTempFile(s.T(), "Containerfile", "FROM alpine:latest\nRUN echo 'test'\n")
+// TestImageSuiteWithAllImplementations runs image tests with all implementations.
+func TestImageSuiteWithAllImplementations(t *testing.T) {
+	for _, impl := range test.AvailableImplementations() {
+		t.Run(impl, func(t *testing.T) {
+			suite.Run(t, &ImageSuite{
+				McpSuite: test.McpSuite{Config: config.Config{PodmanImpl: impl}},
+			})
+		})
+	}
 }
 
 func (s *ImageSuite) TestImageList() {
@@ -58,7 +60,7 @@ func (s *ImageSuite) TestImageList() {
 	})
 
 	s.Run("returns image data with expected format", func() {
-		text := toolResult.Content[0].(mcp.TextContent).Text
+		text := toolResult.Content[0].(*mcp.TextContent).Text
 
 		expectedHeaders := regexp.MustCompile(`(?m)^REPOSITORY\s+TAG\s+DIGEST\s+IMAGE ID\s+CREATED\s+SIZE\s*$`)
 		s.Regexpf(expectedHeaders, text, "expected headers not found in output:\n%s", text)
@@ -69,6 +71,85 @@ func (s *ImageSuite) TestImageList() {
 
 	s.Run("mock server received image list request", func() {
 		s.True(s.MockServer.HasRequest("GET", "/libpod/images/json"))
+	})
+}
+
+func (s *ImageSuite) TestImageListFormattingEdgeCases() {
+	s.WithImageList([]test.ImageListResponse{
+		{
+			ID:       "sha256:a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2",
+			RepoTags: []string{"dangling-image"},
+			Digest:   "sha256:a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2",
+			Created:  1704067200,
+			Size:     85000000,
+		},
+		{
+			ID:       "sha256:f1e2d3c4b5a6f7e8d9c0b1a2f3e4d5c6b7a8f9e0d1c2b3a4f5e6d7c8b9a0f1e2",
+			RepoTags: []string{"docker.io/library/nginx:latest"},
+			Digest:   "sha256:f1e2d3c4b5a6f7e8d9c0b1a2f3e4d5c6",
+			Created:  1704067200,
+			Size:     142000000,
+		},
+	})
+
+	toolResult, err := s.CallTool("image_list", map[string]interface{}{})
+
+	s.Run("returns OK", func() {
+		s.NoError(err)
+		s.False(toolResult.IsError)
+	})
+
+	// Image IDs are truncated to 12 chars (after stripping sha256: for the API
+	// impl). The CLI includes the sha256: prefix. Both impls truncate.
+	// We don't assert absence of the full hash because the Digest column may
+	// contain it.
+	s.Run("truncates long image IDs", func() {
+		text := toolResult.Content[0].(*mcp.TextContent).Text
+		s.Contains(text, "a1b2c3d4e5f6", "should contain truncated first image ID")
+		s.Contains(text, "f1e2d3c4b5a6", "should contain truncated second image ID")
+	})
+
+	s.Run("handles RepoTag without colon", func() {
+		text := toolResult.Content[0].(*mcp.TextContent).Text
+		s.Contains(text, "dangling-image", "should contain the tag-less image name")
+	})
+
+	s.Run("returns image data", func() {
+		text := toolResult.Content[0].(*mcp.TextContent).Text
+		s.Contains(text, "nginx", "should contain nginx image")
+	})
+}
+
+func (s *ImageSuite) TestImageListWithNamesOnly() {
+	s.WithImageList([]test.ImageListResponse{
+		{
+			ID:      "sha256:abc123def456",
+			Names:   []string{"localhost/my-local-image:v1.0"},
+			Created: 1704067200,
+			Size:    85000000,
+		},
+		{
+			ID:      "sha256:xyz789ghi012",
+			Names:   []string{"localhost/another-image"},
+			Created: 1704067200,
+			Size:    42000000,
+		},
+	})
+
+	toolResult, err := s.CallTool("image_list", map[string]interface{}{})
+
+	s.Run("returns OK", func() {
+		s.NoError(err)
+		s.False(toolResult.IsError)
+	})
+
+	// The Names fallback (images with Names but no RepoTags) is only used by
+	// the API implementation's formatImageList. The CLI always renders <none>
+	// for images without RepoTags regardless of Names.
+	s.Run("returns image data", func() {
+		text := toolResult.Content[0].(*mcp.TextContent).Text
+		s.Contains(text, "abc12", "should contain first image ID")
+		s.Contains(text, "xyz78", "should contain second image ID")
 	})
 }
 
@@ -83,11 +164,17 @@ func (s *ImageSuite) TestImageListEmpty() {
 	})
 
 	s.Run("returns empty or headers-only output", func() {
-		text := toolResult.Content[0].(mcp.TextContent).Text
+		text := toolResult.Content[0].(*mcp.TextContent).Text
 		// Some podman versions print headers even when empty, others don't
 		// Just verify no image data is present
 		s.NotContains(text, "nginx", "should not contain image data")
 	})
+}
+
+func (s *ImageSuite) SetupTest() {
+	s.McpSuite.SetupTest()
+	// Create a temporary Containerfile for build tests
+	s.containerFile = test.CreateTempFile(s.T(), "Containerfile", "FROM alpine:latest\nRUN echo 'test'\n")
 }
 
 func (s *ImageSuite) TestImagePull() {
@@ -95,7 +182,7 @@ func (s *ImageSuite) TestImagePull() {
 		toolResult, err := s.CallTool("image_pull", map[string]interface{}{})
 		s.NoError(err)
 		s.True(toolResult.IsError, "tool result should indicate an error")
-		text := toolResult.Content[0].(mcp.TextContent).Text
+		text := toolResult.Content[0].(*mcp.TextContent).Text
 		s.Contains(text, "imageName", "error should mention the missing parameter")
 		s.Contains(text, "required", "error should indicate parameter is required")
 	})
@@ -109,7 +196,7 @@ func (s *ImageSuite) TestImagePull() {
 		})
 		s.NoError(err)
 		s.True(toolResult.IsError, "tool result should indicate an error")
-		text := toolResult.Content[0].(mcp.TextContent).Text
+		text := toolResult.Content[0].(*mcp.TextContent).Text
 		s.NotEmpty(text, "error message should not be empty")
 	})
 
@@ -121,6 +208,7 @@ func (s *ImageSuite) TestImagePull() {
 				w.Header().Set("Content-Type", "application/json")
 				test.WriteJSON(w, test.ImagePullResponse{
 					ID:     "sha256:shortname123",
+					Images: []string{"sha256:shortname123"},
 					Status: "Download complete",
 				})
 				return
@@ -139,7 +227,7 @@ func (s *ImageSuite) TestImagePull() {
 		})
 
 		s.Run("returns success message with docker.io prefix", func() {
-			text := toolResult.Content[0].(mcp.TextContent).Text
+			text := toolResult.Content[0].(*mcp.TextContent).Text
 			s.Contains(text, "docker.io/nginx", "should contain the docker.io prefixed image name")
 			s.Contains(text, "pulled successfully", "should indicate success")
 		})
@@ -158,7 +246,7 @@ func (s *ImageSuite) TestImagePull() {
 		})
 
 		s.Run("returns success message", func() {
-			text := toolResult.Content[0].(mcp.TextContent).Text
+			text := toolResult.Content[0].(*mcp.TextContent).Text
 			s.Contains(text, "nginx", "should contain image name")
 			s.Contains(text, "pulled successfully", "should indicate success")
 		})
@@ -174,7 +262,7 @@ func (s *ImageSuite) TestImagePush() {
 		toolResult, err := s.CallTool("image_push", map[string]interface{}{})
 		s.NoError(err)
 		s.True(toolResult.IsError, "tool result should indicate an error")
-		text := toolResult.Content[0].(mcp.TextContent).Text
+		text := toolResult.Content[0].(*mcp.TextContent).Text
 		s.Contains(text, "imageName", "error should mention the missing parameter")
 		s.Contains(text, "required", "error should indicate parameter is required")
 	})
@@ -188,7 +276,7 @@ func (s *ImageSuite) TestImagePush() {
 		})
 		s.NoError(err)
 		s.True(toolResult.IsError, "tool result should indicate an error")
-		text := toolResult.Content[0].(mcp.TextContent).Text
+		text := toolResult.Content[0].(*mcp.TextContent).Text
 		s.NotEmpty(text, "error message should not be empty")
 	})
 
@@ -214,7 +302,7 @@ func (s *ImageSuite) TestImagePush() {
 		})
 
 		s.Run("returns success message", func() {
-			text := toolResult.Content[0].(mcp.TextContent).Text
+			text := toolResult.Content[0].(*mcp.TextContent).Text
 			s.Contains(text, "pushed successfully", "should indicate success")
 		})
 
@@ -229,7 +317,7 @@ func (s *ImageSuite) TestImageRemove() {
 		toolResult, err := s.CallTool("image_remove", map[string]interface{}{})
 		s.NoError(err)
 		s.True(toolResult.IsError, "tool result should indicate an error")
-		text := toolResult.Content[0].(mcp.TextContent).Text
+		text := toolResult.Content[0].(*mcp.TextContent).Text
 		s.Contains(text, "imageName", "error should mention the missing parameter")
 		s.Contains(text, "required", "error should indicate parameter is required")
 	})
@@ -243,7 +331,7 @@ func (s *ImageSuite) TestImageRemove() {
 		})
 		s.NoError(err)
 		s.True(toolResult.IsError, "tool result should indicate an error")
-		text := toolResult.Content[0].(mcp.TextContent).Text
+		text := toolResult.Content[0].(*mcp.TextContent).Text
 		s.NotEmpty(text, "error message should not be empty")
 	})
 
@@ -269,7 +357,7 @@ func (s *ImageSuite) TestImageRemove() {
 		})
 
 		s.Run("returns success response", func() {
-			text := toolResult.Content[0].(mcp.TextContent).Text
+			text := toolResult.Content[0].(*mcp.TextContent).Text
 			s.NotEmpty(text, "should have output")
 		})
 
@@ -284,7 +372,7 @@ func (s *ImageSuite) TestImageBuild() {
 		toolResult, err := s.CallTool("image_build", map[string]interface{}{})
 		s.NoError(err)
 		s.True(toolResult.IsError, "tool result should indicate an error")
-		text := toolResult.Content[0].(mcp.TextContent).Text
+		text := toolResult.Content[0].(*mcp.TextContent).Text
 		s.Contains(text, "containerFile", "error should mention the missing parameter")
 		s.Contains(text, "required", "error should indicate parameter is required")
 	})
@@ -295,12 +383,12 @@ func (s *ImageSuite) TestImageBuild() {
 		})
 		s.NoError(err)
 		s.True(toolResult.IsError, "tool result should indicate an error")
-		text := toolResult.Content[0].(mcp.TextContent).Text
+		text := toolResult.Content[0].(*mcp.TextContent).Text
 		s.NotEmpty(text, "error message should not be empty")
 	})
 
 	s.Run("image_build(containerFile=valid) builds image", func() {
-		s.WithImageBuild("sha256:built123")
+		s.WithImageBuild("a1b2c3d4e5f6")
 
 		_, _ = s.CallTool("image_build", map[string]interface{}{
 			"containerFile": s.containerFile,
@@ -321,7 +409,7 @@ func (s *ImageSuite) TestImageBuild() {
 	})
 
 	s.Run("image_build(imageName=example.com/org/image:tag) includes tag parameter", func() {
-		s.WithImageBuild("sha256:tagged123")
+		s.WithImageBuild("b2c3d4e5f6a7")
 
 		_, _ = s.CallTool("image_build", map[string]interface{}{
 			"containerFile": s.containerFile,

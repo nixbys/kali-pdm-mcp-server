@@ -7,13 +7,15 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"runtime"
 	"strings"
 
-	"github.com/mark3labs/mcp-go/client"
-	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/suite"
 
+	"github.com/manusa/podman-mcp-server/pkg/config"
 	mcpServer "github.com/manusa/podman-mcp-server/pkg/mcp"
+	"github.com/manusa/podman-mcp-server/pkg/podman"
 )
 
 // McpSuite is a test suite that uses a mock Podman API server
@@ -27,20 +29,38 @@ import (
 //
 // Note: This suite requires a real podman or docker binary to be available.
 // If neither is available, tests using this suite will be skipped.
+//
+// For custom configuration, set the Config field before running:
+//
+//	func TestContainerToolsWithCLI(t *testing.T) {
+//	    suite.Run(t, &ContainerToolsSuite{
+//	        McpSuite: test.McpSuite{Config: config.Config{PodmanImpl: "cli"}},
+//	    })
+//	}
 type McpSuite struct {
 	suite.Suite
+	// Config specifies the configuration for the MCP server.
+	// If empty, uses config.Default().
+	Config        config.Config
 	originalEnv   []string
 	MockServer    *MockPodmanServer
 	mcpServer     *mcpServer.Server
 	mcpHttpServer *httptest.Server
-	mcpClient     *client.Client
+	mcpClient     *mcp.Client
+	mcpSession    *mcp.ClientSession
 }
 
 // SetupTest initializes the mock server, MCP server, and client before each test.
 func (s *McpSuite) SetupTest() {
 	// Check if real podman is available
-	s.Require().True(IsPodmanAvailable(),
-		"podman CLI is not available - install podman to run these tests")
+	if !IsPodmanAvailable() {
+		// On Linux, podman should always be available - fail the test
+		// On other platforms (macOS, Windows), skip if podman is not available
+		if runtime.GOOS == "linux" {
+			s.Require().Fail("podman CLI is not available - install podman to run these tests")
+		}
+		s.T().Skip("podman CLI not available (expected on non-Linux platforms without podman machine)")
+	}
 
 	s.originalEnv = os.Environ()
 	var err error
@@ -51,33 +71,32 @@ func (s *McpSuite) SetupTest() {
 	// Set CONTAINER_HOST to point to mock server
 	WithContainerHost(s.T(), s.MockServer.URL())
 
-	// Create MCP server (it will use the real podman binary which talks to mock server)
-	s.mcpServer, err = mcpServer.NewServer()
+	// Create MCP server
+	// Default to CLI implementation since the mock server is designed for CLI testing.
+	// The API implementation requires a real Podman socket and proper streaming support.
+	cfg := s.Config
+	if cfg.PodmanImpl == "" {
+		cfg.PodmanImpl = "cli"
+	}
+	cfg = config.WithOverrides(cfg)
+	s.mcpServer, err = mcpServer.NewServer(cfg)
 	s.Require().NoError(err)
 
 	// Wrap in httptest.Server with Streamable HTTP handler
 	streamableHandler := s.mcpServer.ServeStreamableHTTP()
 	s.mcpHttpServer = httptest.NewServer(streamableHandler)
 
-	// Create MCP client
-	s.mcpClient, err = client.NewStreamableHttpClient(s.mcpHttpServer.URL)
-	s.Require().NoError(err)
-
-	err = s.mcpClient.Start(s.T().Context())
-	s.Require().NoError(err)
-
-	// Initialize MCP protocol
-	initRequest := mcp.InitializeRequest{}
-	initRequest.Params.ProtocolVersion = mcp.LATEST_PROTOCOL_VERSION
-	initRequest.Params.ClientInfo = mcp.Implementation{Name: "test", Version: "1.33.7"}
-	_, err = s.mcpClient.Initialize(s.T().Context(), initRequest)
+	// Create MCP client and connect
+	s.mcpClient = mcp.NewClient(&mcp.Implementation{Name: "test", Version: "1.33.7"}, nil)
+	transport := &mcp.StreamableClientTransport{Endpoint: s.mcpHttpServer.URL}
+	s.mcpSession, err = s.mcpClient.Connect(s.T().Context(), transport, nil)
 	s.Require().NoError(err)
 }
 
 // TearDownTest cleans up resources after each test.
 func (s *McpSuite) TearDownTest() {
-	if s.mcpClient != nil {
-		_ = s.mcpClient.Close()
+	if s.mcpSession != nil {
+		_ = s.mcpSession.Close()
 	}
 	if s.mcpHttpServer != nil {
 		s.mcpHttpServer.Close()
@@ -90,10 +109,10 @@ func (s *McpSuite) TearDownTest() {
 
 // CallTool calls an MCP tool by name with the given arguments.
 func (s *McpSuite) CallTool(name string, args map[string]interface{}) (*mcp.CallToolResult, error) {
-	callToolRequest := mcp.CallToolRequest{}
-	callToolRequest.Params.Name = name
-	callToolRequest.Params.Arguments = args
-	return s.mcpClient.CallTool(s.T().Context(), callToolRequest)
+	return s.mcpSession.CallTool(s.T().Context(), &mcp.CallToolParams{
+		Name:      name,
+		Arguments: args,
+	})
 }
 
 // CallToolRawResponse represents the raw JSON-RPC response from the server.
@@ -120,11 +139,11 @@ type CallToolRawResponse struct {
 // This bypasses the typed client and allows testing with malformed arguments.
 // It handles the Streamable HTTP protocol including session initialization.
 func (s *McpSuite) CallToolRaw(name string, argumentsJSON string) (*CallToolRawResponse, error) {
-	// First, initialize the session using the same protocol version as the typed client
-	initBody := fmt.Sprintf(
-		`{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"%s","clientInfo":{"name":"test","version":"1.0"}}}`,
-		mcp.LATEST_PROTOCOL_VERSION,
-	)
+	// First, initialize the session with the protocol version matching the go-sdk's latest.
+	// The go-sdk doesn't export its protocol version constant, so we hardcode it here.
+	// Update this value when upgrading the go-sdk to a version with a newer protocol.
+	const protocolVersion = "2025-06-18"
+	initBody := `{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"` + protocolVersion + `","clientInfo":{"name":"test","version":"1.0"}}}`
 
 	initReq, err := http.NewRequest("POST", s.mcpHttpServer.URL, strings.NewReader(initBody))
 	if err != nil {
@@ -187,7 +206,7 @@ func (s *McpSuite) CallToolRaw(name string, argumentsJSON string) (*CallToolRawR
 
 // ListTools returns the list of available MCP tools.
 func (s *McpSuite) ListTools() (*mcp.ListToolsResult, error) {
-	return s.mcpClient.ListTools(s.T().Context(), mcp.ListToolsRequest{})
+	return s.mcpSession.ListTools(s.T().Context(), &mcp.ListToolsParams{})
 }
 
 // WithContainerList sets up the mock server to return a list of containers.
@@ -329,6 +348,7 @@ func (s *McpSuite) WithImagePull(imageID string) {
 		w.Header().Set("Content-Type", "application/json")
 		WriteJSON(w, ImagePullResponse{
 			ID:     imageID,
+			Images: []string{imageID},
 			Status: "Download complete",
 		})
 	}
@@ -378,6 +398,7 @@ func (s *McpSuite) WithContainerRun(containerID string) {
 	pullHandler := func(w http.ResponseWriter, _ *http.Request) {
 		WriteJSON(w, ImagePullResponse{
 			ID:     "sha256:abc123def456",
+			Images: []string{"sha256:abc123def456"},
 			Status: "Already exists",
 		})
 	}
@@ -415,15 +436,14 @@ func (s *McpSuite) WithContainerRun(containerID string) {
 
 // WithImageBuild sets up the mock server to handle image builds.
 // Returns a successful build response.
+// Note: The imageID must be a valid hex string of at least 12 characters
+// (e.g., "a1b2c3d4e5f6") because the API binding's processBuildResponse
+// requires a stream line matching ^[0-9a-f]{12} to capture the image ID.
 func (s *McpSuite) WithImageBuild(imageID string) {
 	buildHandler := func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		// Return streaming build output in NDJSON format
-		// Note: Use \\n for escaped newline in JSON, \n for line separator
-		_, _ = w.Write([]byte(`{"stream":"Step 1/1 : FROM alpine\\n"}` + "\n"))
-		_, _ = w.Write([]byte(`{"stream":"Successfully built ` + imageID + `\\n"}` + "\n"))
-		// Write ID in format podman expects
-		_, _ = w.Write([]byte(`{"stream":"` + imageID + `\\n"}` + "\n"))
+		_, _ = w.Write([]byte(`{"stream":"STEP 1/1: FROM alpine\n"}` + "\n"))
+		_, _ = w.Write([]byte(`{"stream":"` + imageID + `\n"}` + "\n"))
 	}
 	s.MockServer.Handle("POST", "/libpod/build", buildHandler)
 	s.MockServer.Handle("POST", "/build", buildHandler)
@@ -441,4 +461,29 @@ func (s *McpSuite) GetCapturedRequest(method, pathPattern string) *CapturedReque
 // Returns nil if no matching request is found.
 func (s *McpSuite) PopLastCapturedRequest(method, pathPattern string) *CapturedRequest {
 	return s.MockServer.PopLastRequest(method, pathPattern)
+}
+
+// AvailableImplementations returns the list of Podman implementations available for testing.
+// This can be used to create parameterized tests that run the same suite with different implementations.
+//
+// Example usage with testify/suite:
+//
+//	func TestContainerSuiteWithAllImplementations(t *testing.T) {
+//	    for _, impl := range test.AvailableImplementations() {
+//	        suite.Run(t, &ContainerSuite{
+//	            McpSuite: test.McpSuite{Config: config.Config{PodmanImpl: impl}},
+//	        })
+//	    }
+//	}
+func AvailableImplementations() []string {
+	// Returns all implementations registered in the registry.
+	// Currently "cli" and "api" are registered.
+	return podman.ImplementationNames()
+}
+
+// DefaultImplementation returns the default Podman implementation for testing.
+// This returns "cli" because the mock server is designed for CLI testing.
+// The API implementation requires a real Podman socket and proper streaming support.
+func DefaultImplementation() string {
+	return "cli"
 }

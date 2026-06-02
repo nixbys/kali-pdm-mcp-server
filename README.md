@@ -6,7 +6,7 @@
 [![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/manusa/podman-mcp-server?sort=semver)](https://github.com/manusa/podman-mcp-server/releases/latest)
 [![Build](https://github.com/manusa/podman-mcp-server/actions/workflows/build.yaml/badge.svg)](https://github.com/manusa/podman-mcp-server/actions/workflows/build.yaml)
 
-[✨ Features](#features) | [🚀 Getting Started](#getting-started) | [🎥 Demos](#demos) | [⚙️ Configuration](#configuration) | [🛠️ Tools](#tools) | [🧑‍💻 Development](#development)
+[✨ Features](#features) | [🚀 Getting Started](#getting-started) | [📚 Documentation](#documentation) | [🎥 Demos](#demos) | [⚙️ Configuration](#configuration) | [🛠️ Tools](#tools) | [🧑‍💻 Development](#development)
 
 ## ✨ Features <a id="features"></a>
 
@@ -37,18 +37,18 @@ Open your `claude_desktop_config.json` and add the mcp server to the list of `mc
 
 ### VS Code / VS Code Insiders
 
-Install the Podman MCP server extension in VS Code Insiders by pressing the following link:
+Install the Podman MCP server by clicking one of the following links:
 
-[<img src="https://img.shields.io/badge/VS_Code-VS_Code?style=flat-square&label=Install%20Server&color=0098FF" alt="Install in VS Code">](https://insiders.vscode.dev/redirect?url=vscode%3Amcp%2Finstall%3F%257B%2522name%2522%253A%2522podman%2522%252C%2522command%2522%253A%2522npx%2522%252C%2522args%2522%253A%255B%2522-y%2522%252C%2522podman-mcp-server%2540latest%2522%255D%257D)
+[<img src="https://img.shields.io/badge/VS_Code-VS_Code?style=flat-square&label=Install%20Server&color=0098FF" alt="Install in VS Code">](https://vscode.dev/redirect?url=vscode%3Amcp%2Finstall%3F%257B%2522name%2522%253A%2522podman%2522%252C%2522command%2522%253A%2522npx%2522%252C%2522args%2522%253A%255B%2522-y%2522%252C%2522podman-mcp-server%2540latest%2522%255D%257D)
 [<img alt="Install in VS Code Insiders" src="https://img.shields.io/badge/VS_Code_Insiders-VS_Code_Insiders?style=flat-square&label=Install%20Server&color=24bfa5">](https://insiders.vscode.dev/redirect?url=vscode-insiders%3Amcp%2Finstall%3F%257B%2522name%2522%253A%2522podman%2522%252C%2522command%2522%253A%2522npx%2522%252C%2522args%2522%253A%255B%2522-y%2522%252C%2522podman-mcp-server%2540latest%2522%255D%257D)
 
 Alternatively, you can install the extension manually by running the following command:
 
 ```shell
 # For VS Code
-code --add-mcp '{"name":"podman","command":"npx","args":["podman-mcp-server@latest"]}'
+code --add-mcp '{"name":"podman","command":"npx","args":["-y","podman-mcp-server@latest"]}'
 # For VS Code Insiders
-code-insiders --add-mcp '{"name":"podman","command":"npx","args":["podman-mcp-server@latest"]}'
+code-insiders --add-mcp '{"name":"podman","command":"npx","args":["-y","podman-mcp-server@latest"]}'
 ```
 
 ### Goose CLI
@@ -70,6 +70,10 @@ extensions:
 
 ```
 
+## 📚 Documentation <a id="documentation"></a>
+
+For detailed setup guides, configuration reference, and feature specifications, see the **[Documentation](docs/README.md)**.
+
 ## 🎥 Demos <a id="demos"></a>
 
 ## ⚙️ Configuration <a id="configuration"></a>
@@ -90,11 +94,13 @@ npx podman-mcp-server@latest --help
 
 ### Configuration Options
 
-| Option           | Description                                                                                      |
-|------------------|--------------------------------------------------------------------------------------------------|
-| `--port`, `-p`   | Starts the MCP server in HTTP mode with Streamable HTTP at `/mcp` and SSE at `/sse` endpoints.  |
-| `--sse-port`     | **Deprecated.** Use `--port` instead. Starts the MCP server in SSE-only mode.                   |
-| `--sse-base-url` | **Deprecated.** SSE public base URL to use when sending the endpoint message.                   |
+| Option                 | Description                                                                                      |
+|------------------------|--------------------------------------------------------------------------------------------------|
+| `--port`, `-p`         | Starts the MCP server in HTTP mode with Streamable HTTP at `/mcp` and SSE at `/sse` endpoints.  |
+| `--output-format`, `-o`| Output format for list commands: `text` (default, human-readable table) or `json`.              |
+| `--podman-impl`        | Podman implementation to use. Auto-detects if not specified.                                    |
+| `--sse-port`           | **Deprecated.** Use `--port` instead. Starts the MCP server in SSE-only mode.                   |
+| `--sse-base-url`       | **Deprecated.** SSE public base URL to use when sending the endpoint message.                   |
 
 ### Transport Modes
 
@@ -111,6 +117,30 @@ podman-mcp-server --port 8080
 # Legacy SSE-only server on port 8080 (deprecated, use --port instead)
 podman-mcp-server --sse-port 8080
 ```
+
+### Podman Implementations
+
+The server supports multiple Podman backend implementations:
+
+| Implementation | Description | Priority |
+|----------------|-------------|----------|
+| `api` | Podman REST API via Unix socket | 100 (preferred) |
+| `cli` | Podman/Docker CLI wrapper | 50 (fallback) |
+
+By default, the server **auto-detects** the best available implementation.
+The `api` implementation is preferred when a Podman socket is available, otherwise the `cli` implementation is used as a fallback.
+
+Use the `--podman-impl` flag to force a specific implementation:
+
+```shell
+# Force CLI implementation
+podman-mcp-server --podman-impl=cli
+
+# Force API implementation (requires Podman socket)
+podman-mcp-server --podman-impl=api
+```
+
+The `api` implementation communicates directly with the Podman REST API via Unix socket, while the `cli` implementation shells out to the `podman` or `docker` binary.
 
 ## 🛠️ Tools <a id="tools"></a>
 

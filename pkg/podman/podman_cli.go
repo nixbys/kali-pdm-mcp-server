@@ -5,10 +5,71 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+
+	"github.com/manusa/podman-mcp-server/pkg/config"
 )
 
+func init() {
+	Register(&podmanCli{})
+}
+
 type podmanCli struct {
-	filePath string
+	filePath     string
+	outputFormat string
+}
+
+// Name returns the unique identifier for this implementation.
+func (p *podmanCli) Name() string {
+	return "cli"
+}
+
+// Description returns a human-readable description for help text.
+func (p *podmanCli) Description() string {
+	return "Podman CLI wrapper"
+}
+
+// Available returns true if this implementation can be used.
+// It checks if a podman binary is available in the PATH.
+func (p *podmanCli) Available() bool {
+	_, err := findBinary()
+	return err == nil
+}
+
+// Priority returns the priority for auto-detection.
+// CLI has priority 50 (lower than API which has 100).
+func (p *podmanCli) Priority() int {
+	return 50
+}
+
+// Initialize creates and initializes a new podmanCli instance.
+// It finds the podman binary in PATH and verifies it works.
+func (p *podmanCli) Initialize(cfg config.Config) (Podman, error) {
+	filePath, err := findBinary()
+	if err != nil {
+		return nil, err
+	}
+	return &podmanCli{
+		filePath:     filePath,
+		outputFormat: cfg.OutputFormat,
+	}, nil
+}
+
+// findBinary searches for a working podman binary in PATH.
+// It tries "podman" and "podman.exe" in order, returning the first
+// one that exists and responds successfully to "version" command.
+// Note: On Windows, LookPath("podman") uses PATHEXT to find .exe/.cmd/etc,
+// making "podman.exe" redundant. We keep it as fallback in case PATHEXT is overridden.
+func findBinary() (string, error) {
+	for _, cmd := range []string{"podman", "podman.exe"} {
+		filePath, err := exec.LookPath(cmd)
+		if err != nil {
+			continue
+		}
+		if _, err = exec.Command(filePath, "version").CombinedOutput(); err == nil {
+			return filePath, nil
+		}
+	}
+	return "", errors.New("podman CLI not found")
 }
 
 // ContainerInspect
@@ -20,7 +81,11 @@ func (p *podmanCli) ContainerInspect(name string) (string, error) {
 // ContainerList
 // https://docs.podman.io/en/stable/markdown/podman-ps.1.html
 func (p *podmanCli) ContainerList() (string, error) {
-	return p.exec("container", "list", "-a")
+	args := []string{"container", "list", "-a"}
+	if p.outputFormat == config.OutputFormatJSON {
+		args = append(args, "--format", "json")
+	}
+	return p.exec(args...)
 }
 
 // ContainerLogs
@@ -81,7 +146,11 @@ func (p *podmanCli) ImageBuild(containerFile string, imageName string) (string, 
 // ImageList
 // https://docs.podman.io/en/stable/markdown/podman-images.1.html
 func (p *podmanCli) ImageList() (string, error) {
-	return p.exec("images", "--digests")
+	args := []string{"images", "--digests"}
+	if p.outputFormat == config.OutputFormatJSON {
+		args = append(args, "--format", "json")
+	}
+	return p.exec(args...)
 }
 
 // ImagePull
@@ -119,29 +188,24 @@ func (p *podmanCli) ImageRemove(imageName string) (string, error) {
 // NetworkList
 // https://docs.podman.io/en/stable/markdown/podman-network-ls.1.html
 func (p *podmanCli) NetworkList() (string, error) {
-	return p.exec("network", "ls")
+	args := []string{"network", "ls"}
+	if p.outputFormat == config.OutputFormatJSON {
+		args = append(args, "--format", "json")
+	}
+	return p.exec(args...)
 }
 
 // VolumeList
 // https://docs.podman.io/en/stable/markdown/podman-volume-ls.1.html
 func (p *podmanCli) VolumeList() (string, error) {
-	return p.exec("volume", "ls")
+	args := []string{"volume", "ls"}
+	if p.outputFormat == config.OutputFormatJSON {
+		args = append(args, "--format", "json")
+	}
+	return p.exec(args...)
 }
 
 func (p *podmanCli) exec(args ...string) (string, error) {
 	output, err := exec.Command(p.filePath, args...).CombinedOutput()
 	return string(output), err
-}
-
-func newPodmanCli() (*podmanCli, error) {
-	for _, cmd := range []string{"podman", "podman.exe"} {
-		filePath, err := exec.LookPath(cmd)
-		if err != nil {
-			continue
-		}
-		if _, err = exec.Command(filePath, "version").CombinedOutput(); err == nil {
-			return &podmanCli{filePath}, nil
-		}
-	}
-	return nil, errors.New("podman CLI not found")
 }

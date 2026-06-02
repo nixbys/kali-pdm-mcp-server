@@ -1,5 +1,13 @@
 package podman
 
+import (
+	"cmp"
+	"slices"
+	"strings"
+
+	"github.com/manusa/podman-mcp-server/pkg/config"
+)
+
 // Podman interface
 type Podman interface {
 	// ContainerInspect displays the low-level information on containers identified by the ID or name
@@ -30,7 +38,45 @@ type Podman interface {
 	VolumeList() (string, error)
 }
 
-func NewPodman() (Podman, error) {
-	// TODO: add implementations for Podman bindings and Docker CLI
-	return newPodmanCli()
+// NewPodman returns a Podman implementation.
+// If cfg.PodmanImpl is empty, auto-detects by iterating implementations by priority.
+// If cfg.PodmanImpl is specified, returns that implementation or error if unavailable.
+func NewPodman(cfg config.Config) (Podman, error) {
+	if cfg.PodmanImpl != "" {
+		// User specified an implementation
+		impl := ImplementationFromString(cfg.PodmanImpl)
+		if impl == nil {
+			return nil, &ErrUnknownImplementation{Name: cfg.PodmanImpl, Available: ImplementationNames()}
+		}
+		if !impl.Available() {
+			return nil, &ErrImplementationNotAvailable{Name: cfg.PodmanImpl, Reason: "not available on this system"}
+		}
+		return impl.Initialize(cfg)
+	}
+
+	// Auto-detect: sort by priority (descending) and return first available
+	impls := Implementations()
+	slices.SortFunc(impls, func(a, b Implementation) int {
+		return cmp.Compare(b.Priority(), a.Priority())
+	})
+
+	var tried []string
+	for _, impl := range impls {
+		if impl.Available() {
+			return impl.Initialize(cfg)
+		}
+		tried = append(tried, impl.Name()+" (not available)")
+	}
+
+	return nil, &ErrNoImplementationAvailable{TriedImplementations: tried}
+}
+
+// ErrUnknownImplementation is returned when an invalid implementation is specified.
+type ErrUnknownImplementation struct {
+	Name      string
+	Available []string
+}
+
+func (e *ErrUnknownImplementation) Error() string {
+	return "invalid podman implementation \"" + e.Name + "\", valid options: " + strings.Join(e.Available, ", ")
 }
