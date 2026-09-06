@@ -1,0 +1,40 @@
+# Supply-chain review
+#
+# Purpose: defend against a pull request that adds (or bumps) a dependency to
+# a version with a known vulnerability or a disallowed license.
+# dependency-review runs ONLY on pull requests: it compares the dependency
+# graph before and after the PR and blocks the merge if the change pulls in a
+# package with a known security advisory. This is the gate; govulncheck in
+# ci-security.yml covers the Go module graph on an ongoing basis (including
+# pre-existing, already-shipped dependencies this check never sees).
+
+name: Dependency review
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+# Default-deny token; the job grants only read access.
+permissions: {}
+
+concurrency:
+  group: dependency-review-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dependency-review:
+    name: dependency-review (PR gate)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803  # v6.1.0
+        with:
+          persist-credentials: false
+
+      - name: Review dependency changes
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294  # v5.0.0
+        with:
+          # Fail the PR on any newly introduced moderate-or-worse advisory.
+          fail-on-severity: moderate
