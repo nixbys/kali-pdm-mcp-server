@@ -1,0 +1,43 @@
+repos:
+  # Same version .github/workflows/secret-scan.yml pins for CI (keep these
+  # two in sync) -- catches a secret before it's ever committed, not just
+  # before it's merged. CI's own full-history scan stays the backstop for
+  # anything that slips past a contributor who skipped pre-commit.
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks
+
+  # Go formatting, vetting, and linting. Uses "-mod" variants so hooks build
+  # against go.mod/go.sum instead of assuming GOPATH-style packages.
+  - repo: https://github.com/dnephin/pre-commit-golang
+    rev: v0.5.1
+    hooks:
+      - id: go-fmt
+      - id: go-vet-mod
+      - id: go-mod-tidy
+
+  # golangci-lint as a local hook: it needs the exact version/build-tags the
+  # Makefile uses (`make lint`), which the pre-commit-golang mirror above
+  # cannot express. Requires golangci-lint on PATH -- see Makefile's own
+  # `golangci-lint` target for the pinned-install command.
+  - repo: local
+    hooks:
+      - id: golangci-lint
+        name: golangci-lint
+        entry: golangci-lint run --build-tags "remote,containers_image_openpgp,exclude_graphdriver_btrfs,btrfs_noversion,exclude_graphdriver_devicemapper"
+        language: system
+        types: [go]
+        pass_filenames: false
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: detect-private-key
+      - id: check-added-large-files
+        args: [--maxkb=1000]
+      - id: check-yaml
+      - id: check-json
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: mixed-line-ending

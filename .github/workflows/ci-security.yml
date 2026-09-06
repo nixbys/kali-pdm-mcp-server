@@ -1,0 +1,84 @@
+# Go-specific security CI
+#
+# Purpose: static analysis and dependency-vulnerability checks that are
+# specific to this Go codebase and complement (not duplicate) the
+# language-agnostic checks elsewhere in .github/workflows:
+#
+#   - gosec: a Go security linter. It looks for insecure coding patterns --
+#     command injection, weak crypto, unsafe file permissions, unhandled
+#     errors on security-relevant calls -- that `make lint`'s default
+#     golangci-lint linter set (errcheck, govet, ineffassign, staticcheck,
+#     unused) does not check for.
+#   - govulncheck: the official Go vulnerability scanner. Unlike
+#     dependency-review (which only looks at the module graph diff on a PR)
+#     and Dependabot (which proposes bumps), govulncheck runs call-graph
+#     analysis to report only vulnerabilities in code actually reachable from
+#     this project's own packages -- much lower noise than a manifest-only
+#     scan, and it also catches vulnerabilities in dependencies nobody has
+#     bumped in a while.
+
+name: CI security (Go)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-security-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GO_VERSION: "1.25"
+  # Match the build tags used by Makefile's build/test/lint targets so these
+  # scans see the same code the shipped binary actually compiles.
+  BUILD_TAGS: "remote,containers_image_openpgp,exclude_graphdriver_btrfs,btrfs_noversion,exclude_graphdriver_devicemapper"
+
+jobs:
+  gosec:
+    name: Security lint (gosec)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803  # v6.1.0
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16  # v6.5.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Install gosec (pinned)
+        run: go install github.com/securego/gosec/v2/cmd/gosec@v2.29.0
+
+      - name: Run gosec
+        run: gosec -tags "$BUILD_TAGS" ./...
+
+  govulncheck:
+    name: Dependency vulnerability scan (govulncheck)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803  # v6.1.0
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16  # v6.5.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Install govulncheck (pinned)
+        run: go install golang.org/x/vuln/cmd/govulncheck@v1.7.0
+
+      - name: Run govulncheck
+        run: govulncheck -tags "$BUILD_TAGS" ./...
