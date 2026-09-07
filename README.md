@@ -1,146 +1,139 @@
-# Podman MCP Server
+# kali-pdm-mcp-server
 
-[![GitHub License](https://img.shields.io/github/license/manusa/podman-mcp-server)](https://github.com/manusa/podman-mcp-server/blob/main/LICENSE)
-[![npm](https://img.shields.io/npm/v/podman-mcp-server)](https://www.npmjs.com/package/podman-mcp-server)
-[![PyPI - Version](https://img.shields.io/pypi/v/podman-mcp-server)](https://pypi.org/project/podman-mcp-server/)
-[![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/manusa/podman-mcp-server?sort=semver)](https://github.com/manusa/podman-mcp-server/releases/latest)
-[![Build](https://github.com/manusa/podman-mcp-server/actions/workflows/build.yaml/badge.svg)](https://github.com/manusa/podman-mcp-server/actions/workflows/build.yaml)
+[![License](https://img.shields.io/github/license/nixbys/kali-pdm-mcp-server)](LICENSE)
+[![Build](https://github.com/nixbys/kali-pdm-mcp-server/actions/workflows/build.yaml/badge.svg)](https://github.com/nixbys/kali-pdm-mcp-server/actions/workflows/build.yaml)
 
-[✨ Features](#features) | [🚀 Getting Started](#getting-started) | [📚 Documentation](#documentation) | [🎥 Demos](#demos) | [⚙️ Configuration](#configuration) | [🛠️ Tools](#tools) | [🧑‍💻 Development](#development)
+A Model Context Protocol (MCP) server that exposes Podman and Docker
+container-runtime operations (list/run/stop/remove containers, build/pull/
+push/remove images, list networks and volumes) as tools an MCP client can
+call.
 
-## ✨ Features <a id="features"></a>
+[🧭 What This Is](#what-this-is) | [🚀 Quick Start](#quick-start) | [🏗️ Architecture](#architecture) | [⚙️ Configuration](#configuration) | [🛠️ Tools](#tools) | [🔒 Security](#security) | [📄 License](#license)
 
-A powerful and flexible MCP server for container runtimes supporting Podman and Docker.
+## 🧭 What This Is <a id="what-this-is"></a>
 
-## 🚀 Getting Started <a id="getting-started"></a>
+`kali-pdm-mcp-server` is a security-hardened fork of
+[`manusa/podman-mcp-server`](https://github.com/manusa/podman-mcp-server),
+maintained for use in a Kali Linux / container-runtime tooling context. The
+fork does not change the server's Go source or its tool set relative to
+upstream at this point in time -- what it adds is a hardened CI/CD pipeline
+(CodeQL, secret scanning, dependency review, pinned-by-SHA Actions,
+Dependabot) and this repository's own `SECURITY.md` and `THREAT_MODEL.md`.
 
-### Claude Desktop
+This is a personal fork, not an independently maintained project: it tracks
+upstream's Go module path (`github.com/manusa/podman-mcp-server`) and its
+npm/PyPI package metadata still names the upstream package, so it has not
+been published under its own package name. Build it from source (below)
+rather than expecting `npx`/`pip install` to pull a `nixbys`-published
+artifact. If you just want the upstream server with no fork-specific CI, use
+the original repository instead.
 
-#### Using npx
+The server understands both Podman and Docker: it auto-detects a Podman REST
+API socket first and falls back to shelling out to whichever of the
+`podman`/`docker` CLI binaries is on `PATH`.
 
-If you have npm installed, this is the fastest way to get started with `podman-mcp-server` on Claude Desktop.
+## 🚀 Quick Start <a id="quick-start"></a>
 
-Open your `claude_desktop_config.json` and add the mcp server to the list of `mcpServers`:
-``` json
+### Prerequisites
+
+- Go 1.25+ (see `go.mod`)
+- A working `podman` or `docker` installation (CLI on `PATH`, and/or a
+  reachable Podman socket)
+- `make`
+
+### Build from source
+
+```shell
+git clone https://github.com/nixbys/kali-pdm-mcp-server.git
+cd kali-pdm-mcp-server
+make build          # runs go mod tidy, go fmt, golangci-lint, then builds
+./podman-mcp-server --help
+```
+
+`make build` produces a `podman-mcp-server` binary in the repository root
+for your current `GOOS`/`GOARCH`. Use `make build-all-platforms` to cross
+compile for darwin/linux/windows on amd64/arm64.
+
+### Wire it into an MCP client
+
+Point any MCP client that spawns local stdio servers at the binary you just
+built. For example, in an MCP client's JSON config:
+
+```json
 {
   "mcpServers": {
     "podman": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "podman-mcp-server@latest"
-      ]
+      "command": "/absolute/path/to/podman-mcp-server"
     }
   }
 }
 ```
 
-### VS Code / VS Code Insiders
+The server also supports HTTP transport for clients that don't spawn a
+subprocess -- see [Configuration](#configuration) and
+[Security](#security) before binding it to anything but `127.0.0.1`.
 
-Install the Podman MCP server by clicking one of the following links:
-
-[<img src="https://img.shields.io/badge/VS_Code-VS_Code?style=flat-square&label=Install%20Server&color=0098FF" alt="Install in VS Code">](https://vscode.dev/redirect?url=vscode%3Amcp%2Finstall%3F%257B%2522name%2522%253A%2522podman%2522%252C%2522command%2522%253A%2522npx%2522%252C%2522args%2522%253A%255B%2522-y%2522%252C%2522podman-mcp-server%2540latest%2522%255D%257D)
-[<img alt="Install in VS Code Insiders" src="https://img.shields.io/badge/VS_Code_Insiders-VS_Code_Insiders?style=flat-square&label=Install%20Server&color=24bfa5">](https://insiders.vscode.dev/redirect?url=vscode-insiders%3Amcp%2Finstall%3F%257B%2522name%2522%253A%2522podman%2522%252C%2522command%2522%253A%2522npx%2522%252C%2522args%2522%253A%255B%2522-y%2522%252C%2522podman-mcp-server%2540latest%2522%255D%257D)
-
-Alternatively, you can install the extension manually by running the following command:
+### Run the test suite
 
 ```shell
-# For VS Code
-code --add-mcp '{"name":"podman","command":"npx","args":["-y","podman-mcp-server@latest"]}'
-# For VS Code Insiders
-code-insiders --add-mcp '{"name":"podman","command":"npx","args":["-y","podman-mcp-server@latest"]}'
+make test
 ```
 
-### Goose CLI
-
-[Goose CLI](https://blog.marcnuri.com/goose-on-machine-ai-agent-cli-introduction) is the easiest (and cheapest) way to get rolling with artificial intelligence (AI) agents.
-
-#### Using npm
-
-If you have npm installed, this is the fastest way to get started with `podman-mcp-server`.
-
-Open your goose `config.yaml` and add the mcp server to the list of `mcpServers`:
-```yaml
-extensions:
-  podman:
-    command: npx
-    args:
-      - -y
-      - podman-mcp-server@latest
+## 🏗️ Architecture <a id="architecture"></a>
 
 ```
+cmd/podman-mcp-server/   -- entrypoint: flag parsing, server startup
+pkg/config/              -- CLI flag definitions and defaults
+pkg/mcp/                 -- MCP tool handlers (container/image/network/volume)
+pkg/api/                 -- shared tool/parameter definitions used by pkg/mcp
+pkg/podman/              -- the two runtime backends and the registry that
+                            picks between them (registry.go, podman_api.go,
+                            podman_cli.go, socket.go)
+pkg/version/             -- build-time version metadata (set via ldflags)
+internal/test/           -- shared test helpers and a mock MCP client/server
+internal/tools/          -- update-readme: regenerates the Tools section
+                            below from the registered tool definitions
+npm/, python/            -- packaging metadata for npm and PyPI distribution
+                            (currently still pointing at the upstream
+                            package identifiers -- see "What This Is")
+```
 
-## 📚 Documentation <a id="documentation"></a>
+At startup, `pkg/podman/registry.go` selects an implementation:
 
-For detailed setup guides, configuration reference, and feature specifications, see the **[Documentation](docs/README.md)**.
+| Implementation | How it works | Priority |
+|----------------|---------------|----------|
+| `api` | Talks to the Podman REST API over a Unix socket | 100 (preferred) |
+| `cli` | Shells out to the `podman` or `docker` binary | 50 (fallback) |
 
-## 🎥 Demos <a id="demos"></a>
+The `api` backend is used automatically when a Podman socket is reachable;
+otherwise the server falls back to the `cli` backend. `--podman-impl` forces
+one or the other. Every MCP tool call in `pkg/mcp` is dispatched to whichever
+backend is active, so the tool surface is identical regardless of which one
+is in use.
 
 ## ⚙️ Configuration <a id="configuration"></a>
 
-The Podman MCP server can be configured using command line (CLI) arguments.
+The server takes no environment variables -- everything is a CLI flag on the
+compiled binary:
 
-You can run the CLI executable either by using `npx` or by downloading the [latest release binary](https://github.com/manusa/podman-mcp-server/releases/latest).
-
-```shell
-# Run the Podman MCP server using npx (in case you have npm installed)
-npx podman-mcp-server@latest --help
-```
-
-```shell
-# Run the Podman MCP server using the latest release binary
-./podman-mcp-server --help
-```
-
-### Configuration Options
-
-| Option                 | Description                                                                                      |
-|------------------------|--------------------------------------------------------------------------------------------------|
-| `--port`, `-p`         | Starts the MCP server in HTTP mode with Streamable HTTP at `/mcp` and SSE at `/sse` endpoints.  |
-| `--output-format`, `-o`| Output format for list commands: `text` (default, human-readable table) or `json`.              |
-| `--podman-impl`        | Podman implementation to use. Auto-detects if not specified.                                    |
-| `--sse-port`           | **Deprecated.** Use `--port` instead. Starts the MCP server in SSE-only mode.                   |
-| `--sse-base-url`       | **Deprecated.** SSE public base URL to use when sending the endpoint message.                   |
-
-### Transport Modes
-
-The server supports multiple transport modes:
-
-1. **STDIO mode** (default) - Communicates via standard input/output
-2. **HTTP mode** (`--port`) - Modern HTTP transport with both Streamable HTTP and SSE endpoints
-3. **SSE-only mode** (`--sse-port`) - Legacy Server-Sent Events transport (deprecated)
+| Flag | Description |
+|------|-------------|
+| `--port`, `-p` | Start in HTTP mode: Streamable HTTP at `/mcp`, SSE at `/sse`. |
+| `--output-format`, `-o` | `text` (default) or `json` for list-style tool output. |
+| `--podman-impl` | Force `api` or `cli` instead of auto-detecting. |
+| `--sse-port` | **Deprecated** legacy SSE-only mode. Use `--port`. |
+| `--sse-base-url` | **Deprecated** SSE public base URL. |
 
 ```shell
-# Start HTTP server on port 8080 (Streamable HTTP at /mcp and SSE at /sse)
-podman-mcp-server --port 8080
+# stdio mode (default) -- what MCP clients spawn
+./podman-mcp-server
 
-# Legacy SSE-only server on port 8080 (deprecated, use --port instead)
-podman-mcp-server --sse-port 8080
+# HTTP mode, bound only to loopback
+./podman-mcp-server --port 8080
+
+# Force the CLI backend even if a Podman socket is present
+./podman-mcp-server --podman-impl=cli
 ```
-
-### Podman Implementations
-
-The server supports multiple Podman backend implementations:
-
-| Implementation | Description | Priority |
-|----------------|-------------|----------|
-| `api` | Podman REST API via Unix socket | 100 (preferred) |
-| `cli` | Podman/Docker CLI wrapper | 50 (fallback) |
-
-By default, the server **auto-detects** the best available implementation.
-The `api` implementation is preferred when a Podman socket is available, otherwise the `cli` implementation is used as a fallback.
-
-Use the `--podman-impl` flag to force a specific implementation:
-
-```shell
-# Force CLI implementation
-podman-mcp-server --podman-impl=cli
-
-# Force API implementation (requires Podman socket)
-podman-mcp-server --podman-impl=api
-```
-
-The `api` implementation communicates directly with the Podman REST API via Unix socket, while the `cli` implementation shells out to the `podman` or `docker` binary.
 
 ## 🛠️ Tools <a id="tools"></a>
 
@@ -211,17 +204,23 @@ The `api` implementation communicates directly with the Podman REST API via Unix
 
 <!-- AVAILABLE-TOOLS-END -->
 
-## 🧑‍💻 Development <a id="development"></a>
+Run `make update-readme-tools` after adding or changing a tool to
+regenerate this section from the registered tool definitions.
 
-### Running with mcp-inspector
+## 🔒 Security <a id="security"></a>
 
-Compile the project and run the Podman MCP server with [mcp-inspector](https://modelcontextprotocol.io/docs/tools/inspector) to inspect the MCP server.
+This server hands an MCP client direct control over the container runtime on
+the host it runs on -- there is no per-tool authorization or confirmation
+step. Read [`SECURITY.md`](SECURITY.md) for deployment guidance (stdio vs.
+HTTP mode, rootless vs. rootful sockets, supported-versions policy, and how
+to report a vulnerability) and [`THREAT_MODEL.md`](THREAT_MODEL.md) for the
+full trust-boundary and per-tool risk breakdown. CI enforces CodeQL static
+analysis, gitleaks secret scanning, `govulncheck`/`gosec`, and GitHub Actions
+dependency review on every change; see `.github/workflows/`.
 
-```shell
-# Compile the project
-make build
-# Run the Podman MCP server with mcp-inspector
-npx @modelcontextprotocol/inspector@latest $(pwd)/podman-mcp-server
-```
+## 📄 License <a id="license"></a>
 
-mcp-name: io.github.manusa/podman-mcp-server
+Apache License 2.0 -- see [`LICENSE`](LICENSE). As a fork,
+security-relevant fixes that also apply to the upstream implementation
+should be reported to [`manusa/podman-mcp-server`](https://github.com/manusa/podman-mcp-server)
+as well, so upstream users are protected too (see `SECURITY.md`).
