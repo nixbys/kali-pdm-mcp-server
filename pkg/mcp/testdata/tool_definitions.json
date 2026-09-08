@@ -1,15 +1,14 @@
 [
   {
     "annotations": {
-      "title": "Container: Inspect",
-      "readOnlyHint": true,
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": false
+      "openWorldHint": false,
+      "readOnlyHint": true,
+      "title": "Container: Inspect"
     },
     "description": "Displays the low-level information and configuration of a Docker or Podman container with the specified container ID or name",
     "inputSchema": {
-      "type": "object",
       "properties": {
         "name": {
           "description": "Docker or Podman container ID or name to display the information",
@@ -18,17 +17,18 @@
       },
       "required": [
         "name"
-      ]
+      ],
+      "type": "object"
     },
     "name": "container_inspect"
   },
   {
     "annotations": {
-      "title": "Container: List",
-      "readOnlyHint": true,
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": false
+      "openWorldHint": false,
+      "readOnlyHint": true,
+      "title": "Container: List"
     },
     "description": "Prints out information about the running Docker or Podman containers",
     "inputSchema": {
@@ -38,15 +38,14 @@
   },
   {
     "annotations": {
-      "title": "Container: Logs",
-      "readOnlyHint": true,
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": false
+      "openWorldHint": false,
+      "readOnlyHint": true,
+      "title": "Container: Logs"
     },
     "description": "Displays the logs of a Docker or Podman container with the specified container ID or name",
     "inputSchema": {
-      "type": "object",
       "properties": {
         "name": {
           "description": "Docker or Podman container ID or name to display the logs",
@@ -55,19 +54,21 @@
       },
       "required": [
         "name"
-      ]
+      ],
+      "type": "object"
     },
     "name": "container_logs"
   },
   {
     "annotations": {
-      "title": "Container: Remove",
       "destructiveHint": true,
-      "openWorldHint": false
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false,
+      "title": "Container: Remove"
     },
     "description": "Removes a Docker or Podman container with the specified container ID or name (rm)",
     "inputSchema": {
-      "type": "object",
       "properties": {
         "name": {
           "description": "Docker or Podman container ID or name to remove",
@@ -76,19 +77,21 @@
       },
       "required": [
         "name"
-      ]
+      ],
+      "type": "object"
     },
     "name": "container_remove"
   },
   {
     "annotations": {
-      "title": "Container: Run",
       "destructiveHint": false,
-      "openWorldHint": false
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false,
+      "title": "Container: Run"
     },
     "description": "Runs a Docker or Podman container with the specified image name",
     "inputSchema": {
-      "type": "object",
       "properties": {
         "environment": {
           "description": "Environment variables to set in the container. Format: \u003ckey\u003e=\u003cvalue\u003e. Example: FOO=bar. (Optional, add only to set environment variables)",
@@ -111,20 +114,21 @@
       },
       "required": [
         "imageName"
-      ]
+      ],
+      "type": "object"
     },
     "name": "container_run"
   },
   {
     "annotations": {
-      "title": "Container: Stop",
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": false
+      "openWorldHint": false,
+      "readOnlyHint": false,
+      "title": "Container: Stop"
     },
     "description": "Stops a Docker or Podman running container with the specified container ID or name",
     "inputSchema": {
-      "type": "object",
       "properties": {
         "name": {
           "description": "Docker or Podman container ID or name to stop",
@@ -133,19 +137,21 @@
       },
       "required": [
         "name"
-      ]
+      ],
+      "type": "object"
     },
     "name": "container_stop"
   },
   {
     "annotations": {
-      "title": "Image: Build",
       "destructiveHint": false,
-      "openWorldHint": false
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false,
+      "title": "Image: Build"
     },
     "description": "Build a Docker or Podman image from a Dockerfile, Podmanfile, or Containerfile",
     "inputSchema": {
-      "type": "object",
       "properties": {
         "containerFile": {
           "description": "The absolute path to the Dockerfile, Podmanfile, or Containerfile to build the image from",
@@ -158,17 +164,18 @@
       },
       "required": [
         "containerFile"
-      ]
+      ],
+      "type": "object"
     },
     "name": "image_build"
   },
   {
     "annotations": {
-      "title": "Image: List",
-      "readOnlyHint": true,
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": false
+      "openWorldHint": false,
+      "readOnlyHint": true,
+      "title": "Image: List"
     },
     "description": "List the Docker or Podman images on the local machine",
     "inputSchema": {
@@ -178,14 +185,14 @@
   },
   {
     "annotations": {
-      "title": "Image: Pull",
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false,
+      "title": "Image: Pull"
     },
     "description": "Copies (pulls) a Docker or Podman container image from a registry onto the local machine storage",
     "inputSchema": {
-      "type": "object",
       "properties": {
         "imageName": {
           "description": "Docker or Podman container image name to pull",
@@ -194,20 +201,21 @@
       },
       "required": [
         "imageName"
-      ]
+      ],
+      "type": "object"
     },
     "name": "image_pull"
   },
   {
     "annotations": {
-      "title": "Image: Push",
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false,
+      "title": "Image: Push"
     },
     "description": "Pushes a Docker or Podman container image, manifest list or image index from local machine storage to a registry",
     "inputSchema": {
-      "type": "object",
       "properties": {
         "imageName": {
           "description": "Docker or Podman container image name to push",
@@ -216,19 +224,21 @@
       },
       "required": [
         "imageName"
-      ]
+      ],
+      "type": "object"
     },
     "name": "image_push"
   },
   {
     "annotations": {
-      "title": "Image: Remove",
       "destructiveHint": true,
-      "openWorldHint": false
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false,
+      "title": "Image: Remove"
     },
     "description": "Removes a Docker or Podman image from the local machine storage",
     "inputSchema": {
-      "type": "object",
       "properties": {
         "imageName": {
           "description": "Docker or Podman container image name to remove",
@@ -237,17 +247,18 @@
       },
       "required": [
         "imageName"
-      ]
+      ],
+      "type": "object"
     },
     "name": "image_remove"
   },
   {
     "annotations": {
-      "title": "Network: List",
-      "readOnlyHint": true,
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": false
+      "openWorldHint": false,
+      "readOnlyHint": true,
+      "title": "Network: List"
     },
     "description": "List all the available Docker or Podman networks",
     "inputSchema": {
@@ -257,11 +268,11 @@
   },
   {
     "annotations": {
-      "title": "Volume: List",
-      "readOnlyHint": true,
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": false
+      "openWorldHint": false,
+      "readOnlyHint": true,
+      "title": "Volume: List"
     },
     "description": "List all the available Docker or Podman volumes",
     "inputSchema": {
