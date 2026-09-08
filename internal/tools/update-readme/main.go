@@ -19,6 +19,11 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+	// #nosec G703 -- localReadmePath is already sanitized above via
+	// filepath.Clean + filepath.Localize (the stdlib-recommended pair for
+	// this exact purpose), and this is a local dev CLI tool (`go run
+	// ./internal/tools/update-readme`) invoked by a maintainer with a
+	// path they chose themselves -- not a network-facing input.
 	readme, err := os.ReadFile(localReadmePath)
 	if err != nil {
 		panic(err)
@@ -105,6 +110,7 @@ func main() {
 		toolsDocs.String(),
 	)
 
+	// #nosec G703 -- same localReadmePath sanitized and justified above.
 	if err := os.WriteFile(localReadmePath, []byte(updated), 0o600); err != nil {
 		panic(err)
 	}

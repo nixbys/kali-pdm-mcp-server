@@ -276,10 +276,13 @@ func (s *McpSuite) WithContainerLogs(logs string) {
 		// STREAM_TYPE: 0=stdin, 1=stdout, 2=stderr
 		frame := make([]byte, 8+len(logs))
 		frame[0] = 1 // stdout
-		frame[4] = byte(len(logs) >> 24)
-		frame[5] = byte(len(logs) >> 16)
-		frame[6] = byte(len(logs) >> 8)
-		frame[7] = byte(len(logs))
+		// Test-only mock response builder; logs is always a small,
+		// test-author-supplied fixture string (never network input), so
+		// len(logs) truncating past uint32 is not a reachable scenario.
+		frame[4] = byte(len(logs) >> 24) // #nosec G115
+		frame[5] = byte(len(logs) >> 16) // #nosec G115
+		frame[6] = byte(len(logs) >> 8)  // #nosec G115
+		frame[7] = byte(len(logs))       // #nosec G115
 		copy(frame[8:], logs)
 		_, _ = w.Write(frame)
 	}
