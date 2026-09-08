@@ -33,7 +33,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  GO_VERSION: "1.25"
+  GO_VERSION: "1.26.8"
   # Match the build tags used by Makefile's build/test/lint targets so these
   # scans see the same code the shipped binary actually compiles.
   BUILD_TAGS: "remote,containers_image_openpgp,exclude_graphdriver_btrfs,btrfs_noversion,exclude_graphdriver_devicemapper"
@@ -81,4 +81,13 @@ jobs:
         run: go install golang.org/x/vuln/cmd/govulncheck@v1.7.0
 
       - name: Run govulncheck
-        run: govulncheck -tags "$BUILD_TAGS" ./...
+        # -json + check-govulncheck.py rather than govulncheck's own exit
+        # code: this project has a handful of known, currently-unfixable
+        # vulnerabilities in transitive dependencies (see
+        # .github/govulncheck-allowlist.txt for each one's justification --
+        # no patched release exists for any of them yet) that would
+        # otherwise leave this check permanently, uninformatively red.
+        # Anything reachable and NOT on that allowlist still fails the job.
+        run: |
+          govulncheck -tags "$BUILD_TAGS" -json ./... > govulncheck.json
+          python3 .github/scripts/check-govulncheck.py govulncheck.json .github/govulncheck-allowlist.txt
