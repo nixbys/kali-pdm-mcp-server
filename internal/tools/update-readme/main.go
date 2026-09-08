@@ -89,14 +89,14 @@ func main() {
 		toolsDocs.WriteString("<details>\n\n<summary>" + displayCategory + "</summary>\n\n")
 
 		for _, tool := range categoryTools {
-			toolsDocs.WriteString(fmt.Sprintf("- **%s** - %s\n", tool.name, tool.description))
+			fmt.Fprintf(&toolsDocs, "- **%s** - %s\n", tool.name, tool.description)
 			for _, propName := range slices.Sorted(maps.Keys(tool.properties)) {
 				property := tool.properties[propName]
-				toolsDocs.WriteString(fmt.Sprintf("  - `%s` (`%s`)", propName, property.propType))
+				fmt.Fprintf(&toolsDocs, "  - `%s` (`%s`)", propName, property.propType)
 				if slices.Contains(tool.required, propName) {
 					toolsDocs.WriteString(" **(required)**")
 				}
-				toolsDocs.WriteString(fmt.Sprintf(" - %s\n", property.description))
+				fmt.Fprintf(&toolsDocs, " - %s\n", property.description)
 			}
 			toolsDocs.WriteString("\n")
 		}

@@ -22,7 +22,7 @@ BUILD_TAGS = remote,containers_image_openpgp,exclude_graphdriver_btrfs,btrfs_nov
 COMMON_BUILD_ARGS = -tags "$(BUILD_TAGS)" -ldflags "$(LD_FLAGS)"
 
 GOLANGCI_LINT = $(shell pwd)/_output/tools/bin/golangci-lint
-GOLANGCI_LINT_VERSION ?= v2.8.0
+GOLANGCI_LINT_VERSION ?= v2.13.2
 
 # Version for package publishing should not append the -dirty flag
 GIT_TAG_VERSION ?= $(shell echo $(shell git describe --tags --always) | sed 's/^v//')
