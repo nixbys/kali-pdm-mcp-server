@@ -105,7 +105,7 @@ func main() {
 		toolsDocs.String(),
 	)
 
-	if err := os.WriteFile(localReadmePath, []byte(updated), 0o644); err != nil {
+	if err := os.WriteFile(localReadmePath, []byte(updated), 0o600); err != nil {
 		panic(err)
 	}
 }

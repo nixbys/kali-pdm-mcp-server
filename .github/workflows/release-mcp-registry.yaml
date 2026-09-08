@@ -41,7 +41,7 @@ jobs:
             TAG="${{ github.event.workflow_run.head_branch }}"
           fi
           # Strip the v prefix
-          echo "version=${TAG#v}" >> $GITHUB_OUTPUT
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
 
       - name: Update server.json version
         run: |
