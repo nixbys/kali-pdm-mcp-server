@@ -29,8 +29,11 @@ func NewServer(cfg config.Config) (*Server, error) {
 			},
 			&mcp.ServerOptions{
 				Capabilities: &mcp.ServerCapabilities{
-					Tools:   &mcp.ToolCapabilities{},
-					Logging: &mcp.LoggingCapabilities{},
+					Tools: &mcp.ToolCapabilities{},
+					// Logging capability deprecated in go-sdk v1.7.0 (SEP-2577) but
+					// stays functional for at least a 12-month deprecation window;
+					// revisit once a replacement API lands.
+					Logging: &mcp.LoggingCapabilities{}, //nolint:staticcheck // SA1019
 				},
 			},
 		),
