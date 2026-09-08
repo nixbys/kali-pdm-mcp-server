@@ -65,6 +65,9 @@ func findBinary() (string, error) {
 		if err != nil {
 			continue
 		}
+		// #nosec G204 -- filePath is exec.LookPath's own resolution of one
+		// of the two hardcoded literals above ("podman"/"podman.exe"), not
+		// external input; this is the standard find-then-invoke idiom.
 		if _, err = exec.Command(filePath, "version").CombinedOutput(); err == nil {
 			return filePath, nil
 		}
@@ -205,7 +208,22 @@ func (p *podmanCli) VolumeList() (string, error) {
 	return p.exec(args...)
 }
 
+// exec runs the resolved podman binary (p.filePath, from findBinary/LookPath
+// -- never user input) with args built by this file's ContainerX/ImageX/etc.
+// methods, which do carry MCP-tool-call-derived values (image names,
+// container names, port specs...).
+//
+// This is not shell command injection (CWE-78's usual shape): exec.Command
+// invokes the podman binary directly via argv, with no shell in between, so
+// there's no metacharacter/subshell interpretation to exploit -- each
+// element of args reaches podman as one literal argument, exactly as if
+// passed on a command line with correct quoting. What an untrusted value
+// *can* still do is influence which podman subcommand/flags run (argument
+// injection, e.g. a "container name" beginning with "-"); containing that
+// is podman's own privilege boundary (rootless by default) rather than
+// something this thin CLI wrapper can enforce without knowing every
+// subcommand's flag grammar.
 func (p *podmanCli) exec(args ...string) (string, error) {
-	output, err := exec.Command(p.filePath, args...).CombinedOutput()
+	output, err := exec.Command(p.filePath, args...).CombinedOutput() // #nosec G204
 	return string(output), err
 }

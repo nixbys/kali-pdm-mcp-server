@@ -22,7 +22,7 @@ BUILD_TAGS = remote,containers_image_openpgp,exclude_graphdriver_btrfs,btrfs_nov
 COMMON_BUILD_ARGS = -tags "$(BUILD_TAGS)" -ldflags "$(LD_FLAGS)"
 
 GOLANGCI_LINT = $(shell pwd)/_output/tools/bin/golangci-lint
-GOLANGCI_LINT_VERSION ?= v2.8.0
+GOLANGCI_LINT_VERSION ?= v2.13.2
 
 # Version for package publishing should not append the -dirty flag
 GIT_TAG_VERSION ?= $(shell echo $(shell git describe --tags --always) | sed 's/^v//')
@@ -76,12 +76,23 @@ format: ## Format the code
 tidy: ## Tidy up the go modules
 	go mod tidy
 
-# Download and install golangci-lint if not already installed
+# Download and install golangci-lint if not already installed.
+#
+# Built from source via `go install` rather than the project's own
+# install.sh: that script fetches a prebuilt binary plus a checksum to
+# verify it against, and that verification has been failing outright
+# (reproduced consistently, not a transient blip) for every recent
+# release we tried. `go install` sidesteps it entirely -- it's verified
+# through Go's own module proxy/checksum database instead -- and as a
+# bonus guarantees the binary is built with whatever Go toolchain this
+# module actually requires, so a `go` directive bump can never again
+# leave golangci-lint refusing to run because *it* was built with an
+# older Go than the one it's asked to analyze.
 .PHONY: golangci-lint
 golangci-lint:
 	@[ -f $(GOLANGCI_LINT) ] || { \
 		set -e ;\
-		curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(shell dirname $(GOLANGCI_LINT)) $(GOLANGCI_LINT_VERSION) ;\
+		GOBIN=$(shell dirname $(GOLANGCI_LINT)) go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION) ;\
 	}
 
 .PHONY: lint

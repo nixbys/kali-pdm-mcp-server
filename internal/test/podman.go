@@ -19,6 +19,8 @@ func IsPodmanAvailable() bool {
 		// Use "version" subcommand (not --version flag) to match newPodmanCli() behavior.
 		// On macOS/Windows, this requires a running podman machine, which is intentional -
 		// we want to skip tests when podman isn't fully functional.
+		// #nosec G204 -- filePath is exec.LookPath's own resolution of one
+		// of the two hardcoded literals above, not external input.
 		if _, err = exec.Command(filePath, "version").CombinedOutput(); err == nil {
 			return true
 		}

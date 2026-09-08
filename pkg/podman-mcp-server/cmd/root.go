@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -69,8 +70,9 @@ Podman Model Context Protocol (MCP) server
 			mux.Handle("/mcp", mcpServer.ServeStreamableHTTP())
 			mux.Handle("/sse", mcpServer.ServeSse())
 			httpServer = &http.Server{
-				Addr:    fmt.Sprintf(":%d", port),
-				Handler: mux,
+				Addr:              fmt.Sprintf(":%d", port),
+				Handler:           mux,
+				ReadHeaderTimeout: 10 * time.Second,
 			}
 			go func() {
 				if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -81,8 +83,9 @@ Podman Model Context Protocol (MCP) server
 			// Legacy SSE-only mode for backwards compatibility
 			sseHandler := mcpServer.ServeSse()
 			httpServer = &http.Server{
-				Addr:    fmt.Sprintf(":%d", ssePort),
-				Handler: sseHandler,
+				Addr:              fmt.Sprintf(":%d", ssePort),
+				Handler:           sseHandler,
+				ReadHeaderTimeout: 10 * time.Second,
 			}
 			go func() {
 				if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {

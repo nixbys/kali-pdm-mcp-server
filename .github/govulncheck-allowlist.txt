@@ -1,0 +1,41 @@
+# Known, currently-unfixable vulnerabilities reachable from this project's
+# own call graph, per `govulncheck` (verified via `-json`'s per-finding
+# trace, not just text-mode's summary -- each ID below has at least one
+# finding whose trace includes an actual function call, not merely an
+# import). Re-review this list whenever bumping podman/v5, buildah,
+# docker/docker, or x/crypto: remove an entry the moment its "Fixed in" is
+# no longer "N/A" (check `govulncheck -tags "$BUILD_TAGS" ./...` output, or
+# https://pkg.go.dev/vuln/<ID>) and let the CI check start enforcing it.
+#
+# .github/scripts/check-govulncheck.py reads this file: one ID per line,
+# blank lines and lines starting with # are ignored.
+
+# golang.org/x/crypto/openpgp is unmaintained and unsafe by design (no fix
+# will ever ship); reached transitively via containers/podman/v5's own
+# openpgp-based signature verification (pkg/podman_api.go -> podman's
+# define/init chain), not anything this project calls directly.
+# https://pkg.go.dev/vuln/GO-2026-5932
+GO-2026-5932
+
+# containers/buildah build-breakout via a malicious Containerfile/Git HTTP
+# server. No fixed version exists yet for the podman/v5 v5.8.x line this
+# project pins. https://pkg.go.dev/vuln/GO-2026-5116
+GO-2026-5116
+
+# Moby (docker/docker) AuthZ plugin bypass / privilege-validation
+# off-by-one -- both in Docker's plugin-authorization HTTP middleware, a
+# subsystem this project never touches (it uses docker/docker only for
+# shared type definitions podman's API bindings reuse). Both are
+# UNREVIEWED govulncheck DB entries whose traces terminate in package
+# init() side effects, not a call into the actual vulnerable code.
+# https://pkg.go.dev/vuln/GO-2026-4887 https://pkg.go.dev/vuln/GO-2026-4883
+GO-2026-4887
+GO-2026-4883
+
+# Podman: insecure temp file permissions / memory-based DoS. Both are
+# UNREVIEWED entries with no fixed version recorded, still present at the
+# latest podman/v5 v5.x release (v5.8.6) this project pins -- nothing to
+# upgrade to yet.
+# https://pkg.go.dev/vuln/GO-2025-3961 https://pkg.go.dev/vuln/GO-2024-3042
+GO-2025-3961
+GO-2024-3042

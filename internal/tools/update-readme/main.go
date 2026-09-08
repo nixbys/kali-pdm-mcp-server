@@ -19,6 +19,11 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+	// #nosec G703 -- localReadmePath is already sanitized above via
+	// filepath.Clean + filepath.Localize (the stdlib-recommended pair for
+	// this exact purpose), and this is a local dev CLI tool (`go run
+	// ./internal/tools/update-readme`) invoked by a maintainer with a
+	// path they chose themselves -- not a network-facing input.
 	readme, err := os.ReadFile(localReadmePath)
 	if err != nil {
 		panic(err)
@@ -84,14 +89,14 @@ func main() {
 		toolsDocs.WriteString("<details>\n\n<summary>" + displayCategory + "</summary>\n\n")
 
 		for _, tool := range categoryTools {
-			toolsDocs.WriteString(fmt.Sprintf("- **%s** - %s\n", tool.name, tool.description))
+			fmt.Fprintf(&toolsDocs, "- **%s** - %s\n", tool.name, tool.description)
 			for _, propName := range slices.Sorted(maps.Keys(tool.properties)) {
 				property := tool.properties[propName]
-				toolsDocs.WriteString(fmt.Sprintf("  - `%s` (`%s`)", propName, property.propType))
+				fmt.Fprintf(&toolsDocs, "  - `%s` (`%s`)", propName, property.propType)
 				if slices.Contains(tool.required, propName) {
 					toolsDocs.WriteString(" **(required)**")
 				}
-				toolsDocs.WriteString(fmt.Sprintf(" - %s\n", property.description))
+				fmt.Fprintf(&toolsDocs, " - %s\n", property.description)
 			}
 			toolsDocs.WriteString("\n")
 		}
@@ -105,7 +110,8 @@ func main() {
 		toolsDocs.String(),
 	)
 
-	if err := os.WriteFile(localReadmePath, []byte(updated), 0o644); err != nil {
+	// #nosec G703 -- same localReadmePath sanitized and justified above.
+	if err := os.WriteFile(localReadmePath, []byte(updated), 0o600); err != nil {
 		panic(err)
 	}
 }

@@ -50,6 +50,11 @@ func DetectSocket() (string, error) {
 
 	// Check each path
 	for _, path := range socketPaths {
+		// #nosec G703 -- socketPaths is built from hardcoded defaults plus
+		// $XDG_RUNTIME_DIR, which is *meant* to steer socket discovery per
+		// this function's own doc comment (the standard XDG rootless
+		// convention, not attacker input); this only os.Stat()s to check
+		// existence, it doesn't read/write file contents at the path.
 		if _, err := os.Stat(path); err == nil {
 			return "unix://" + path, nil
 		}

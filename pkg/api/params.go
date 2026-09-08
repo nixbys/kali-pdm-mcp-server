@@ -44,6 +44,14 @@ func (p *ToolHandlerParams) GetStringArray(key string) []string {
 	return result
 }
 
+// isValidPort reports whether p fits in the valid TCP/UDP port range and,
+// critically, in uint16 (the type podman's port-mapping API requires) --
+// callers cast into uint16 without a second check, so validating only
+// "> 0" here would let an out-of-range value silently wrap.
+func isValidPort(p int) bool {
+	return p > 0 && p <= 65535
+}
+
 // GetPortMappings extracts port mappings from a string array (format: "hostPort:containerPort").
 func (p *ToolHandlerParams) GetPortMappings(key string) map[int]int {
 	arr := p.GetStringArray(key)
@@ -54,7 +62,11 @@ func (p *ToolHandlerParams) GetPortMappings(key string) map[int]int {
 	for _, mapping := range arr {
 		var hostPort, containerPort int
 		if _, err := fmt.Sscanf(mapping, "%d:%d", &hostPort, &containerPort); err == nil {
-			if hostPort > 0 && containerPort > 0 {
+			// Both bounds matter, not just > 0: a port outside uint16's range
+			// (e.g. a caller-supplied 99999999) would otherwise reach the
+			// uint16(...) conversion downstream and silently wrap to an
+			// unintended port instead of being rejected.
+			if isValidPort(hostPort) && isValidPort(containerPort) {
 				result[hostPort] = containerPort
 			}
 		}

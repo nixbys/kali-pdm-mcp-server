@@ -216,6 +216,13 @@ func (p *podmanApi) ContainerRun(imageName string, portMappings map[int]int, env
 	// Port mappings
 	if len(portMappings) > 0 {
 		for hostPort, containerPort := range portMappings {
+			// GetPortMappings (pkg/api/params.go) already range-checks both
+			// ports before they get here; re-checking at the uint16(...)
+			// conversion itself means this can never silently wrap even if
+			// a future caller populates portMappings some other way.
+			if hostPort <= 0 || hostPort > 65535 || containerPort <= 0 || containerPort > 65535 {
+				return "", fmt.Errorf("invalid port mapping %d:%d: ports must be between 1 and 65535", hostPort, containerPort)
+			}
 			s.PortMappings = append(s.PortMappings, netTypes.PortMapping{
 				HostPort:      uint16(hostPort),
 				ContainerPort: uint16(containerPort),

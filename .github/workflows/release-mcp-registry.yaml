@@ -1,6 +1,16 @@
 name: Publish to MCP Registry
 
 on:
+  # zizmor: ignore[dangerous-triggers] workflow_run's usual risk is a
+  # less-trusted upstream workflow (e.g. one a fork's PR can trigger)
+  # handing this workflow elevated trust/secrets over attacker-influenced
+  # state. Not the case here: the only upstream workflow is "Release",
+  # triggered exclusively by `push: tags: v*` -- already gated on repo
+  # write access, same trust level this workflow runs with. The other
+  # half of the usual risk (publishing whatever the default branch happens
+  # to be at trigger time, rather than what was actually released) is
+  # closed below: Checkout is pinned to `head_sha`/the dispatched tag, not
+  # left to float.
   workflow_run:
     workflows: ["Release"]
     types:
@@ -28,18 +38,34 @@ jobs:
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803  # v6.1.0
+        with:
+          persist-credentials: false
+          # Without this, checkout defaults to the branch's current HEAD --
+          # for a workflow_run trigger that's a time-of-check/time-of-use
+          # gap (anything pushed to the default branch between the Release
+          # workflow completing and this one firing would get published
+          # under the *old* tag's name instead of what was actually
+          # released), and for workflow_dispatch it would silently ignore
+          # the tag the caller asked for. head_sha is the exact commit the
+          # Release run built, and is the documented, reliable field for
+          # this on workflow_run (head_branch can be ambiguous for a
+          # tag-triggered run).
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.event.workflow_run.head_sha }}
 
       - name: Get version
         id: version
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            TAG="${{ inputs.tag }}"
+            TAG="${INPUTS_TAG}"
           else
-            TAG="${{ github.event.workflow_run.head_branch }}"
+            TAG="${GITHUB_EVENT_WORKFLOW_RUN_HEAD_BRANCH}"
           fi
           # Strip the v prefix
-          echo "version=${TAG#v}" >> $GITHUB_OUTPUT
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+        env:
+          INPUTS_TAG: ${{ inputs.tag }}
+          GITHUB_EVENT_WORKFLOW_RUN_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
 
       - name: Update server.json version
         run: |
@@ -47,9 +73,15 @@ jobs:
             '.version = $v | .packages[].version = $v' \
             server.json > server.json.tmp && mv server.json.tmp server.json
 
+      # Pinned to a specific registry release (not "latest") so a new upstream
+      # release cannot silently change the binary this pipeline runs with
+      # publish credentials. Bump MCP_PUBLISHER_VERSION deliberately.
       - name: Install mcp-publisher
+        env:
+          MCP_PUBLISHER_VERSION: v1.8.1
         run: |
-          curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
+          set -euo pipefail
+          curl -fsSL "https://github.com/modelcontextprotocol/registry/releases/download/${MCP_PUBLISHER_VERSION}/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
 
       - name: Authenticate to MCP Registry
         run: ./mcp-publisher login github-oidc
