@@ -3,14 +3,14 @@ module github.com/manusa/podman-mcp-server
 go 1.26.8
 
 require (
-	github.com/containers/buildah v1.43.2
-	github.com/containers/podman/v5 v5.8.6
+	github.com/containers/buildah v1.43.4
+	github.com/containers/podman/v5 v5.8.8
 	github.com/modelcontextprotocol/go-sdk v1.7.0
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.10
 	github.com/spf13/viper v1.21.0
 	github.com/stretchr/testify v1.12.1
-	go.podman.io/common v0.67.1
+	go.podman.io/common v0.67.2
 )
 
 require (
@@ -111,7 +111,7 @@ require (
 	github.com/sylabs/sif/v2 v2.22.0 // indirect
 	github.com/tchap/go-patricia/v2 v2.3.3 // indirect
 	github.com/ulikunitz/xz v0.5.15 // indirect
-	github.com/vbatts/tar-split v0.12.2 // indirect
+	github.com/vbatts/tar-split v0.12.3 // indirect
 	github.com/vbauerster/mpb/v8 v8.10.2 // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
@@ -119,8 +119,8 @@ require (
 	go.opentelemetry.io/otel v1.44.0 // indirect
 	go.opentelemetry.io/otel/metric v1.44.0 // indirect
 	go.opentelemetry.io/otel/trace v1.44.0 // indirect
-	go.podman.io/image/v5 v5.39.2 // indirect
-	go.podman.io/storage v1.62.0 // indirect
+	go.podman.io/image/v5 v5.39.3 // indirect
+	go.podman.io/storage v1.62.1 // indirect
 	go.yaml.in/yaml/v2 v2.4.4 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/crypto v0.56.0 // indirect
